@@ -37,7 +37,6 @@ loaders = {
 class CNN(nn.Module):
     def __init__(self):
         super().__init__()
-
         self.conv1 = nn.Conv2d(1, 16, kernel_size = 3, stride = 1)
         self.max1 = nn.MaxPool2d(kernel_size = 3, stride = 3)
         self.fc1 = nn.Linear(1024, 32)

@@ -42,6 +42,60 @@ loaders = {
                          num_workers = 0),
 }
 
+def n_ary(w, sigma, delta):
+    return 0.5 * (
+        torch.tanh(sigma * (w + delta)) +
+        torch.tanh(sigma * (w - delta))
+    )
+
+class NaryConv2d(nn.Conv2d):
+    def __init__(self, *args, delta = 0.0, **kwargs): # Pass arguments by position and name
+        super().__init__(*args, **kwargs)
+
+        self.sigma = 1
+        self.delta = delta
+
+        self.a = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x):
+        weights_nary = self.a * n_ary(self.weight, self.sigma, self.delta)
+        x = F.conv2d(x, weights_nary, self.bias, stride = self.stride, padding = self.padding, dilation = self.dilation, groups = self.groups)
+
+        return x
+    
+class NaryDense(nn.Linear):
+    def __init__(self, *args, delta = 0.0, **kwargs): # Pass arguments by position and name
+        super().__init__(*args, **kwargs)
+
+        self.sigma = 1
+        self.delta = delta
+
+        self.a = nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x):
+        weights_nary = self.a * n_ary(self.weight, self.sigma, self.delta)
+        x = F.linear(x, weights_nary, self.bias, stride = self.stride, padding = self.padding, dilation = self.dilation, groups = self.groups)
+
+        return x
+
+class CNN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = NaryConv2d(1, 16, kernel_size = 3, stride = 1, delta = 0.0)
+        self.max1 = nn.MaxPool2d(kernel_size = 3, stride = 3)
+        self.fc1 = NaryDense.Linear(1024, 32, delta = 0.0)
+        self.fc2 = NaryDense(32, 10, delta = 0.0)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.max1(x)
+        x = x.view(x.size(0), -1) #Flattens all dimensions except batch size (index 0) for Linear Layer
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+
+        return x
+
+
 # Display a binarised number
 image, label = train_data[1]
 
