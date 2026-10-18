@@ -81,16 +81,22 @@ class NaryDense(nn.Linear):
 class CNN(nn.Module):
     def __init__(self):
         super().__init__()
+
+        self.sigma = 1.0
+
         self.conv1 = NaryConv2d(1, 16, kernel_size = 3, stride = 1, delta = 0.0)
         self.max1 = nn.MaxPool2d(kernel_size = 3, stride = 3)
         self.fc1 = NaryDense.Linear(1024, 32, delta = 0.0)
         self.fc2 = NaryDense(32, 10, delta = 0.0)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = self.conv1(x)
+
+        x = n_ary(x, self.sigma, 0.0)
         x = self.max1(x)
         x = x.view(x.size(0), -1) #Flattens all dimensions except batch size (index 0) for Linear Layer
-        x = F.relu(self.fc1(x))
+        x = self.fc1(x)
+        x = n_ary(x, self.sigma, 0.0)
         x = self.fc2(x)
 
         return x
