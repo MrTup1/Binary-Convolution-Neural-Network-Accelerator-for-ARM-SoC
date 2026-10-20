@@ -100,20 +100,123 @@ device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )
 
+torch.manual_seed(0)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(0)
+
 model = CNN().to(device)
 
 optimizer = optim.Adam(model.parameters(), lr = 0.001)
 
 criterion = nn.CrossEntropyLoss()
 
+schedule = [
+    (1, 3),
+    (2, 3),
+    (4, 3),
+    (8, 3),
+    (16, 3),
+    (32, 3),
+    (64, 3),
+    (128, 3),
+    (256, 3),
+    (512, 3),
+    (768, 3),
+    (1024, 1)
+] #Page 205 Drupelet
+
+def train():
+    model.train()
+
+    running_loss = 0
+
+    for batch_idx, (data, target) in enumerate(loaders['train']):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+
+        loss = criterion(output, target)
+        running_loss += loss.item()
+
+        loss.backward()
+        optimizer.step()
+
+
+    return (running_loss / len(loaders['train'])) # return average loss in this epoch 
+
+def test():
+    model.eval()
+
+    testLoss = 0
+    correct = 0
+
+    with torch.no_grad():
+        for data,target in loaders['test']:
+            data,target = data.to(device), target.to(device)
+
+            output = model(data)
+            testLoss += criterion(output, target).item() #.item() used to extract value out of tensor
+            
+            prediction = output.argmax(dim = 1, keepdim = True)
+            correct += prediction.eq(target.view_as(prediction)).sum().item() #target and prediction different formats
+
+    testLoss /= len(loaders['test']) #Average Test Loss for batches
+    
+    accuracy = 100. * correct / len(loaders['test'].dataset)
+    print(f"Average loss: {testLoss:.4f}")
+    print(f"Test accuracy: {accuracy:.2f}%")
+
+
+for sigma, epochs in schedule:
+    model.sigma = sigma 
+
+    print(f"Sigma: {model.sigma}")
+
+    for epoch in range(epochs):
+        train_loss = train()
+
+        print(f"Train Loss: {train_loss:.4f}")
+
+test()
+
+
+print("Final sigma:", model.sigma)
+
+with torch.no_grad():
+    for name, layer in [
+        ("conv1", model.conv1),
+        ("fc1", model.fc1),
+        ("fc2", model.fc2)
+    ]:
+        g = n_ary(
+            layer.weight,
+            model.sigma,
+            layer.delta
+        )
+
+        fraction = (
+            (g.abs() > 0.999)
+            .float()
+            .mean()
+            .item()
+        )
+
+        print(
+            name,
+            "binary fraction:",
+            fraction,
+            "a:",
+            layer.a.item()
+        )
+
 # Display a binarised number
-image, label = train_data[1]
-
-print("Shape:", image.shape)
-print("Unique values:", torch.unique(image))
-print("Label:", label)
-
-plt.imshow(image.squeeze(), cmap="gray")
-plt.title(f"Label: {label}")
-plt.axis("off")
+model.eval()
+data, target = test_data[1]
+data = data.unsqueeze(0).to(device)
+output = model(data)
+prediction = output.argmax(dim = 1, keepdim = True).item()
+print(f"Prediction: {prediction}")
+image = data.squeeze(0).squeeze(0).cpu().numpy()
+plt.imshow(image, cmap = 'gray')
 plt.show()
